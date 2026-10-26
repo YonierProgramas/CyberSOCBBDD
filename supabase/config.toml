@@ -1,4 +1,4 @@
-project_id = "cybersoc-database"
+project_id = "cybersoc-bbdd"
 
 [db]
 major_version = 17
