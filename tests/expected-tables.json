@@ -1,0 +1,9 @@
+[
+  "profiles", "user_preferences", "consent_purposes", "user_consents",
+  "device_platforms", "devices", "device_settings", "device_events", "device_links",
+  "app_releases", "release_assets", "release_notes", "download_requests",
+  "scan_statuses", "verdict_types", "scan_runs", "scan_verdict_totals", "scan_zones",
+  "scan_zone_totals", "detection_layers", "scan_layer_totals", "report_formats",
+  "reports", "report_sections", "report_charts", "report_chart_series",
+  "report_chart_points", "report_exports", "audit_event_types", "audit_events"
+]
