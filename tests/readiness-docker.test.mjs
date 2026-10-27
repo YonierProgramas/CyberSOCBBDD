@@ -29,6 +29,9 @@ async function waitForMarker(container, marker) {
 test('regresión real: pg_isready acepta BD ausente; readiness rechaza ambas fases temporales', { timeout: 360000 }, async () => {
   const container = `cybersoc-readiness-${randomUUID()}`;
   const image = process.env.CYBERSOC_TEST_POSTGRES_IMAGE ?? 'postgres:17-alpine';
+  // Git puede usar CRLF en Windows; bash dentro de Linux necesita saltos LF.
+  const entrypoint = readFileSync(new URL('./fixtures/readiness-entrypoint.sh', import.meta.url), 'utf8')
+    .replaceAll('\r\n', '\n');
   assert.match(image, /^postgres(?::[a-zA-Z0-9._-]+|@sha256:[a-f0-9]{64})$/);
   docker(['info', '--format', '{{.ServerVersion}}'], undefined, false, 15000);
   try {
@@ -37,8 +40,7 @@ test('regresión real: pg_isready acepta BD ausente; readiness rechaza ambas fas
     docker(['run', '--detach', '--rm', '--name', container, '--network', 'none',
       '--user', 'postgres', '-e', 'PGDATA=/tmp/cybersoc-readiness-data',
       '-e', 'POSTGRES_HOST_AUTH_METHOD=trust', '-e', 'POSTGRES_DB=cybersoc_test',
-      '--entrypoint', 'bash', image, '-c',
-      readFileSync(new URL('./fixtures/readiness-entrypoint.sh', import.meta.url), 'utf8')],
+      '--entrypoint', 'bash', image, '-c', entrypoint],
     undefined, false, 240000);
 
     await waitForMarker(container, '/tmp/cybersoc-before-db');
