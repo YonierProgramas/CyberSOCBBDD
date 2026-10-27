@@ -14,4 +14,6 @@ jobs:
         with:
           node-version: '24'
       - run: npm test
+      - run: node --test tests/readiness.test.mjs
+      - run: node --test tests/readiness-docker.test.mjs
       - run: npm run test:postgres
