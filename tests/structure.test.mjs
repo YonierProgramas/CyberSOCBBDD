@@ -3,6 +3,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createHash } from 'node:crypto';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const expected = JSON.parse(readFileSync(resolve(root, 'tests/expected-tables.json'), 'utf8'));
@@ -52,4 +53,17 @@ test('no hay datos reales de cuenta ni borrado de bases en migraciones', () => {
 test('el inventario no usa tablas del proveedor o migraciones para inflar el conteo', () => {
   assert.ok(expected.every(name => /^[a-z_]+$/.test(name)));
   assert.ok(expected.every(name => !['users', 'schema_migrations', 'objects', 'buckets'].includes(name)));
+});
+
+test('las ocho migraciones aplicadas conservan su contenido aprobado antes de write_paths', () => {
+  // Invariante del diccionario: un nombre aprobado tiene una única huella fija.
+  // Recorrerlo cuesta O(M); calcular los hashes añade O(B) bytes, con M=8.
+  const fingerprints = JSON.parse(readFileSync(resolve(root, 'tests/fixtures/original-migrations.sha256.json'), 'utf8'));
+  assert.equal(Object.keys(fingerprints).length, 8);
+  for (const [name, fingerprint] of Object.entries(fingerprints)) {
+    // Canonizar únicamente CRLF permite el mismo control en Windows y CI Linux.
+    const original = readFileSync(resolve(root, 'supabase/migrations', name), 'utf8').replaceAll('\r\n', '\n');
+    assert.equal(createHash('sha256').update(original).digest('hex'), fingerprint, name);
+  }
+  assert.ok(names.includes('202610270001_write_paths.sql'));
 });

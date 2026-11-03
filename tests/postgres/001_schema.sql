@@ -18,7 +18,15 @@ BEGIN
   IF has_table_privilege('anon', 'public.profiles', 'SELECT') THEN
     RAISE EXCEPTION 'Acceso anónimo a perfiles.';
   END IF;
+  IF EXISTS (SELECT 1 FROM pg_constraint c JOIN pg_class t ON t.oid=c.conrelid
+    JOIN pg_namespace n ON n.oid=t.relnamespace WHERE n.nspname='public' AND NOT c.convalidated) THEN
+    RAISE EXCEPTION 'Hay restricciones de aplicación sin validar';
+  END IF;
 END
 $test$;
 SELECT 'PASS: 30 tablas propias, RLS y privilegios mínimos' AS resultado;
+SELECT c.contype AS tipo_restriccion, count(*) AS restricciones_validadas
+  FROM pg_constraint c JOIN pg_class t ON t.oid=c.conrelid
+  JOIN pg_namespace n ON n.oid=t.relnamespace
+  WHERE n.nspname='public' GROUP BY c.contype ORDER BY c.contype;
 ROLLBACK;

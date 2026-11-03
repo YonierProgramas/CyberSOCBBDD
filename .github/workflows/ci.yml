@@ -17,3 +17,4 @@ jobs:
       - run: node --test tests/readiness.test.mjs
       - run: node --test tests/readiness-docker.test.mjs
       - run: npm run test:postgres
+      - run: node --test tests/postgrest.test.mjs

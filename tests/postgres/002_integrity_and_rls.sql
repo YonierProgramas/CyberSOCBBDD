@@ -10,7 +10,7 @@ INSERT INTO public.profiles(user_id, display_name) VALUES
 INSERT INTO public.user_preferences(user_id)
  SELECT user_id FROM public.profiles;
 INSERT INTO public.user_consents(user_id, purpose_code, granted, policy_version)
- SELECT p.user_id, c.code, true, 'demo-v1' FROM public.profiles p CROSS JOIN public.consent_purposes c;
+ SELECT p.user_id, c.code, true, c.current_policy_version FROM public.profiles p CROSS JOIN public.consent_purposes c;
 
 INSERT INTO public.devices(id, user_id, installation_id, platform_code, display_name, app_version) VALUES
  ('30000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001',
@@ -109,7 +109,7 @@ SELECT 'PASS: recorrido de seis módulos y restricciones de integridad' AS resul
 SET LOCAL ROLE authenticated;
 SET LOCAL request.jwt.claim.sub = '20000000-0000-0000-0000-000000000002';
 DO $test$
-DECLARE table_name text; foreign_count bigint; changed integer;
+DECLARE table_name text; foreign_count bigint; changed integer; writable_column text;
 BEGIN
   FOREACH table_name IN ARRAY ARRAY[
     'profiles', 'user_preferences', 'user_consents', 'devices', 'device_settings',
@@ -119,6 +119,17 @@ BEGIN
   ] LOOP
     EXECUTE format('SELECT count(*) FROM public.%I WHERE user_id <> auth.uid()', table_name) INTO foreign_count;
     IF foreign_count <> 0 THEN RAISE EXCEPTION 'Fuga de filas ajenas en %.', table_name; END IF;
+    writable_column := CASE table_name WHEN 'profiles' THEN 'display_name'
+      WHEN 'user_preferences' THEN 'theme' WHEN 'user_consents' THEN 'granted'
+      WHEN 'devices' THEN 'revoked_at' END;
+    IF writable_column IS NOT NULL THEN
+      EXECUTE format('UPDATE public.%I SET %I = %I WHERE user_id <> auth.uid()',
+        table_name, writable_column, writable_column);
+      GET DIAGNOSTICS changed = ROW_COUNT;
+      IF changed <> 0 THEN RAISE EXCEPTION 'B actualizó filas ajenas en %.', table_name; END IF;
+    ELSIF has_any_column_privilege('authenticated', format('public.%I', table_name), 'UPDATE') THEN
+      RAISE EXCEPTION 'UPDATE no autorizado en %.', table_name;
+    END IF;
   END LOOP;
   IF (SELECT count(*) FROM public.scan_runs) <> 1 THEN RAISE EXCEPTION 'El usuario B no ve su análisis.'; END IF;
   IF (SELECT count(*) FROM public.reports) <> 0 THEN RAISE EXCEPTION 'B puede leer el reporte de A.'; END IF;
@@ -150,7 +161,28 @@ SELECT 'PASS: B solo lee sus datos, no modifica A ni publica/audita' AS resultad
 
 SET LOCAL request.jwt.claim.sub = '10000000-0000-0000-0000-000000000001';
 DO $test$
+DECLARE table_name text; foreign_count bigint; changed integer; writable_column text;
 BEGIN
+  FOREACH table_name IN ARRAY ARRAY[
+    'profiles', 'user_preferences', 'user_consents', 'devices', 'device_settings',
+    'device_events', 'download_requests', 'scan_runs', 'scan_verdict_totals',
+    'scan_zone_totals', 'scan_layer_totals', 'reports', 'report_sections', 'report_charts',
+    'report_chart_series', 'report_chart_points', 'report_exports', 'audit_events'
+  ] LOOP
+    EXECUTE format('SELECT count(*) FROM public.%I WHERE user_id <> auth.uid()', table_name) INTO foreign_count;
+    IF foreign_count <> 0 THEN RAISE EXCEPTION 'A ve filas ajenas en %.', table_name; END IF;
+    writable_column := CASE table_name WHEN 'profiles' THEN 'display_name'
+      WHEN 'user_preferences' THEN 'theme' WHEN 'user_consents' THEN 'granted'
+      WHEN 'devices' THEN 'revoked_at' END;
+    IF writable_column IS NOT NULL THEN
+      EXECUTE format('UPDATE public.%I SET %I = %I WHERE user_id <> auth.uid()',
+        table_name, writable_column, writable_column);
+      GET DIAGNOSTICS changed = ROW_COUNT;
+      IF changed <> 0 THEN RAISE EXCEPTION 'A actualizó filas ajenas en %.', table_name; END IF;
+    ELSIF has_any_column_privilege('authenticated', format('public.%I', table_name), 'UPDATE') THEN
+      RAISE EXCEPTION 'UPDATE no autorizado en %.', table_name;
+    END IF;
+  END LOOP;
   IF (SELECT value FROM public.report_chart_points) <> 10 THEN RAISE EXCEPTION 'A perdió su gráfico.'; END IF;
   IF EXISTS (SELECT 1 FROM public.user_consents WHERE NOT granted) THEN RAISE EXCEPTION 'B cambió el consentimiento de A.'; END IF;
 END
